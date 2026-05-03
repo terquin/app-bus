@@ -197,9 +197,6 @@
     window.currentMode = 'parades';
 
 
-    /**
-     * Inicialitza el mapa, els proveïdors d'imatges i el botó de geolocalització.
-     */
     function initMap() {
         if (!map) {
             map = L.map('map', { zoomControl: false }).setView([41.7249, 1.8265], 14);
@@ -251,7 +248,6 @@
     }
 
 
-    /** Controla les pestanyes (Cerca vs Línies) */
     function switchTab(mode) {
         window.currentMode = mode;
         document.getElementById('tab_parades').classList.remove('active');
@@ -275,7 +271,6 @@
     }
 
 
-    /** Dibuixa punts de parades al mapa solts */
     function updateMap(jsonPayload) {
         initMap();
         layerGroup.clearLayers();
@@ -306,7 +301,6 @@
     }
 
 
-    /** Dibuixa una línia i les seves parades (Pestanya 2) */
     function drawRoute(jsonPayload) {
         initMap();
         layerGroup.clearLayers();
@@ -380,7 +374,6 @@ parades_seleccionades = {}
 # MÒDUL 1: UTILITATS I SUPORT
 # ==============================================================================
 def treure_accents(text):
-    """Elimina accents d'un text per facilitar-ne la cerca manual."""
     if pd.isna(text): return ""
     text = str(text).lower()
     substitucions = {'á':'a', 'à':'a', 'é':'e', 'è':'e', 'í':'i', 'ï':'i', 'ó':'o', 'ò':'o', 'ú':'u', 'ü':'u'}
@@ -390,7 +383,6 @@ def treure_accents(text):
 
 
 def normalitzar_text(s):
-    """Neteja l'string per evitar problemes d'espais i caràcters estranys."""
     try: return unicodedata.normalize('NFC', str(s)).strip()
     except: return str(s).strip()
 
@@ -401,7 +393,6 @@ def normalitzar_text(s):
 # MÒDUL 2: CÀRREGA I GESTIÓ DE MEMÒRIA (BASE DE DADES)
 # ==============================================================================
 async def carregar_gtfs(event=None):
-    """Llegeix l'arxiu ZIP, l'emmagatzema a IndexedDB i n'extreu els DataFrames."""
     loader = js.document.getElementById("loader")
     seccio_cerca = js.document.getElementById("seccio_cerca")
     txt_bd_estat = js.document.getElementById("txt_bd_estat")
@@ -466,8 +457,14 @@ async def carregar_gtfs(event=None):
         loader.style.display = "none"
 
 
+async def init_app():
+    try:
+        file_blob = await js.localforage.getItem('gtfs_data_zip')
+        if file_blob: await carregar_gtfs()
+    except: pass
+
+
 async def esborrar_bd(event=None):
-    """Esborra el ZIP de la memòria local."""
     if js.confirm("Estàs segur que vols esborrar l'arxiu GTFS del mòbil?"):
         await js.localforage.removeItem('gtfs_data_zip')
         js.location.reload()
@@ -482,7 +479,6 @@ js.window.esborrar_bd = esborrar_bd
 # MÒDUL 3: LÒGICA DE CERCA I FILTRES (UI)
 # ==============================================================================
 async def aplicar_filtre_ui(event):
-    """Funció intermitja que actua en fer clic al botó de 'Aplicar Filtre'."""
     btn = js.document.getElementById("btn_aplicar_filtre")
     text_orig = btn.innerText
     btn.innerText = "⏳ Cercant..."
@@ -494,7 +490,6 @@ async def aplicar_filtre_ui(event):
 
 
 def actualitzar_llista_parades():
-    """Filtra quines parades s'ofereixen al buscador en funció del Municipi."""
     if 'stops' not in gtfs_data: return
     ciutat_input = js.document.getElementById("input_ciutat").value.strip()
     stops_df = gtfs_data['stops']
@@ -517,7 +512,7 @@ def actualitzar_llista_parades():
         
     gtfs_data['parades_filtrades'] = parades_filtrades
     
-    # 1. Omple el Datalist del cercador resolent caracters i escapes de Python estricte
+    # 1. Omple el Datalist resolent escapament a l'HTML de manera totalment segura per f-strings
     parades_uniques = sorted(parades_filtrades['stop_name'].dropna().unique())
     html_opcions = ""
     for p in parades_uniques:
@@ -557,7 +552,6 @@ def actualitzar_llista_parades():
 # MÒDUL 4: GESTIÓ DE LA TAULA I MAPA (Afegir/Treure Parades)
 # ==============================================================================
 def afegir_parada(event=None, nom_directe=None):
-    """Afegeix una parada a la llista d'anàlisi de l'usuari."""
     parada_cercada = nom_directe if nom_directe else js.document.getElementById("input_parada").value.strip()
     if not parada_cercada or parada_cercada in parades_seleccionades: return 
         
@@ -584,7 +578,6 @@ js.window.eliminar_parada_py = lambda p: parades_seleccionades.pop(p, None) or r
 
 
 def renderitzar_mapa_global(fit=False):
-    """Envia l'estat actual de les parades seleccionades al Javascript del mapa."""
     parades_filtrades = gtfs_data.get('parades_filtrades')
     if parades_filtrades is None or parades_filtrades.empty: return
     
@@ -596,7 +589,6 @@ js.window.renderitzar_mapa_global_py = renderitzar_mapa_global
 
 
 def renderitzar_ui_multiparada():
-    """Genera l'HTML de la taula de resultats amb les línies de les parades seleccionades."""
     tags_html = ""
     for n in parades_seleccionades:
         n_escaped = n.replace("'", "\\'")
@@ -615,13 +607,14 @@ def renderitzar_ui_multiparada():
             nom_ruta = nom_c if nom_c else nom_l
             nom_escaped = nom.replace("'", "\\'")
             nom_ruta_escaped = nom_ruta.replace("'", "\\'")
+            
+            # Es construeix la línia HTML de forma totalment segura
             html_taula += f"<tr><td><b>{nom}</b></td><td><div class='badge {bg}'>BUS</div><br><b>{nom_c}</b></td><td>{nom_l}</td><td style='text-align:center;'><button style='padding:10px;' onclick=\"window.veure_horaris_js('{nom_escaped}', '{r['route_id']}', '{nom_ruta_escaped}')\">🕒</button></td></tr>"
     html_taula += "</tbody></table>"
     js.document.getElementById("taula_resultats").innerHTML = html_taula
 
 
 def seleccionar_linia_mapa(event=None):
-    """Renderitza al mapa la línia completa (Pestanya 2)."""
     route_id = js.document.getElementById("select_linia_mapa").value
     if not route_id: return js.window.clearMap()
         
@@ -650,7 +643,6 @@ js.window.re_seleccionar_linia_mapa_py = seleccionar_linia_mapa
 # 🧠 MÒDUL 5: MOTOR PRINCIPAL DE CÀLCUL D'HORARIS (SUB-FUNCIONS SEPARADES)
 # ==============================================================================
 def netejar_hora(t):
-    """Corregeix hores nocturnes (ex: 25:30 -> 01:30) per mostrar a l'usuari."""
     try:
         parts = str(t).split(':')
         h, m  = int(parts[0]), parts[1]
@@ -660,7 +652,6 @@ def netejar_hora(t):
 
 
 def preparar_calendaris(calendar, calendar_dates):
-    """Sanetja i neteja els calendaris ATM (Soluciona els problemes de NaN o dades buides)."""
     if calendar is not None and not calendar.empty:
         calendar = calendar.copy()
         calendar.columns = [str(c).lower().strip() for c in calendar.columns]
@@ -684,7 +675,6 @@ def preparar_calendaris(calendar, calendar_dates):
 
 
 def construir_etiqueta_direccio(row, has_headsign, has_direction_id, has_multi_stop):
-    """Crea un títol explicatiu d'Anada/Tornada i afegeix la destinació final."""
     dest_final = str(row.get('destinacio_final', '')).strip()
     dest_final = '' if dest_final == 'nan' else dest_final
     dest_str = f" - Destinació: {dest_final}" if dest_final else ""
@@ -707,13 +697,11 @@ def construir_etiqueta_direccio(row, has_headsign, has_direction_id, has_multi_s
 
 
 def processar_horaris_data_exacta(merged, target_dt, calendar, calendar_dates):
-    """Filtra el Dataframe per buscar els busos vigents exclusivament el dia escollit."""
     target_date_str = target_dt.strftime('%Y%m%d')
     day_name = target_dt.day_name().lower()
     valid_service_ids = set()
 
 
-    # Comprovació de dies actius a la setmana
     if calendar is not None and not calendar.empty:
         mask_range = (((calendar['start_date'] <= target_date_str) | (calendar['start_date'] == '')) & 
                       ((calendar['end_date'] >= target_date_str) | (calendar['end_date'] == '')))
@@ -721,14 +709,12 @@ def processar_horaris_data_exacta(merged, target_dt, calendar, calendar_dates):
         valid_service_ids.update(calendar[mask_range & mask_day]['service_id'].tolist())
 
 
-    # Comprovació de dies excepcionals i festius
     if calendar_dates is not None and not calendar_dates.empty and 'date' in calendar_dates.columns:
         exc_today = calendar_dates[calendar_dates['date'] == target_date_str]
         valid_service_ids.update(exc_today[exc_today['exception_type'] == '1']['service_id'].tolist())
         valid_service_ids.difference_update(exc_today[exc_today['exception_type'] == '2']['service_id'].tolist())
 
 
-    # Recuperació de Serveis Orfes
     sids_in_cal = set()
     if calendar is not None and not calendar.empty: sids_in_cal.update(calendar['service_id'].tolist())
     if calendar_dates is not None and not calendar_dates.empty and 'service_id' in calendar_dates.columns: sids_in_cal.update(calendar_dates['service_id'].tolist())
@@ -740,7 +726,6 @@ def processar_horaris_data_exacta(merged, target_dt, calendar, calendar_dates):
     merged = merged[merged['service_id'].isin(valid_service_ids)].copy()
 
 
-    # Extracció de rutes projectades si l'arxiu GTFS ha caducat
     if merged.empty:
         relax_sids = set()
         route_sids = original_merged['service_id'].unique()
@@ -769,7 +754,6 @@ def processar_horaris_data_exacta(merged, target_dt, calendar, calendar_dates):
 
 
 def agrupar_horaris_globals(merged, calendar, calendar_dates, today_str):
-    """Dedueix un calendari global (Dilluns a Divendres, Dissabte...) per a cada servei vigent."""
     def servei_vigent(sid):
         sid = normalitzar_text(sid)
         has_cal, is_valid = False, False
@@ -921,7 +905,8 @@ def generar_horaris_py(nom_parada, route_id):
         for dest, dest_df in merged.groupby('dir_label', sort=True):
             html_body += f"<h3 style='color:var(--primary);margin-top:15px;border-bottom:2px solid #eee;padding-bottom:5px;'>➔ {dest}</h3>"
             for dia, dia_df in sorted(dest_df.groupby('tipus_dia'), key=lambda x: str(x[0])):
-                html_body += f"<div style='margin-top:15px;font-weight:bold;color:var(--accent);font-size:16px;'>📅 {dia.split('. ', 1)[1] if '. ' in dia else dia}</div><div class='horari-grid'>"
+                nom_dia_net = dia.split('. ', 1)[1] if '. ' in dia else dia
+                html_body += f"<div style='margin-top:15px;font-weight:bold;color:var(--accent);font-size:16px;'>📅 {nom_dia_net}</div><div class='horari-grid'>"
                 for h in dia_df['hora_neta']: html_body += f"<div class='horari-time'>{h}</div>"
                 html_body += "</div>"
 
